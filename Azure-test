@@ -1,0 +1,389 @@
+<deploymentTemplate>
+  <schema>http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json</schema>
+  <contentVersion>1.0.0.0</contentVersion>
+  <parameters>
+    <parameter name="clusterLocation">
+      <type>string</type>
+      <metadata>
+        <description>Location of the Cluster</description>
+      </metadata>
+    </parameter>
+    <parameter name="clusterName">
+      <type>string</type>
+      <defaultValue>Cluster</defaultValue>
+      <metadata>
+        <description>Name of your cluster - Between 3 and 23 characters. Letters and numbers only</description>
+      </metadata>
+    </parameter>
+    <parameter name="fabricTcpGatewayPort">
+      <type>int</type>
+      <defaultValue>19000</defaultValue>
+      <metadata>
+        <description>TCP Client Connection end point to perform management operations on this cluster</description>
+      </metadata>
+    </parameter>
+    <parameter name="fabricHttpGatewayPort">
+      <type>int</type>
+      <defaultValue>19080</defaultValue>
+      <metadata>
+        <description>Http Client Connection end point to perform management operations on this cluster</description>
+      </metadata>
+    </parameter>
+    <parameter name="adminUserName">
+      <type>string</type>
+      <defaultValue>testadm</defaultValue>
+    </parameter>
+    <parameter name="adminPassword">
+      <type>securestring</type>
+    </parameter>
+    <parameter name="loadBalancedAppPort1">
+      <type>int</type>
+      <defaultValue>80</defaultValue>
+    </parameter>
+    <parameter name="loadBalancedAppPort2">
+      <type>int</type>
+      <defaultValue>8081</defaultValue>
+    </parameter>
+    <parameter name="certificateStoreValue">
+      <type>string</type>
+      <allowedValues>
+        <value>My</value>
+      </allowedValues>
+      <defaultValue>My</defaultValue>
+    </parameter>
+    <parameter name="certificateThumbprint">
+      <type>string</type>
+    </parameter>
+    <parameter name="sourceVaultValue">
+      <type>string</type>
+    </parameter>
+    <parameter name="certificateUrlValue">
+      <type>string</type>
+    </parameter>
+    <parameter name="clusterProtectionLevel">
+      <type>string</type>
+      <allowedValues>
+        <value>None</value>
+        <value>Sign</value>
+        <value>EncryptAndSign</value>
+      </allowedValues>
+      <defaultValue>EncryptAndSign</defaultValue>
+    </parameter>
+    <parameter name="storageAccountType">
+      <type>string</type>
+      <allowedValues>
+        <value>Standard_LRS</value>
+        <value>Standard_GRS</value>
+      </allowedValues>
+      <defaultValue>Standard_LRS</defaultValue>
+      <metadata>
+        <description>Replication option for the VM image storage account</description>
+      </metadata>
+    </parameter>
+    <parameter name="supportLogStorageAccountType">
+      <type>string</type>
+      <allowedValues>
+        <value>Standard_LRS</value>
+        <value>Standard_GRS</value>
+      </allowedValues>
+      <defaultValue>Standard_LRS</defaultValue>
+      <metadata>
+        <description>Replication option for the support log storage account</description>
+      </metadata>
+    </parameter>
+  </parameters>
+  <variables>
+    <variable name="computeLocation">[parameters('clusterLocation')]</variable>
+    <variable name="dnsName">[parameters('clusterName')]</variable>
+    <variable name="vmStorageAccountName">[toLower(concat(uniqueString(resourceGroup().id), '1' ))]</variable>
+    <variable name="vmName">vm</variable>
+    <variable name="applicationStartPort">20000</variable>
+    <variable name="applicationEndPort">30000</variable>
+    <variable name="ephemeralStartPort">49152</variable>
+    <variable name="ephemeralEndPort">65534</variable>
+    <variable name="publicIPAddressName">PublicIP-VM</variable>
+    <variable name="publicIPAddressType">Dynamic</variable>
+    <variable name="vmStorageAccountContainerName">vhds</variable>
+    <variable name="virtualNetworkName">VNet</variable>
+    <variable name="addressPrefix">10.0.0.0/16</variable>
+    <variable name="subnet1Name">Subnet-1</variable>
+    <variable name="subnet2Name">Subnet-2</variable>
+    <variable name="subnet1Prefix">10.0.0.0/24</variable>
+    <variable name="subnet2Prefix">10.0.1.0/24</variable>
+    <variable name="nicName">NIC</variable>
+    <variable name="lbName">LoadBalancer</variable>
+    <variable name="lbIPName">PublicIP-LB-FE</variable>
+    <variable name="availSetName">AvailabilitySet</variable>
+    <variable name="maxPercentUpgradeDomainDeltaUnhealthyNodes">100</variable>
+    <variable name="vmImagePublisher">MicrosoftWindowsServer</variable>
+    <variable name="vmImageOffer">WindowsServer</variable>
+    <variable name="vmImageSku">2012-R2-Datacenter</variable>
+    <variable name="vmImageVersion">latest</variable>
+    <variable name="vnetID">[resourceId('Microsoft.Network/virtualNetworks',variables('virtualNetworkName'))]</variable>
+    <variable name="subnet1Ref">[concat(variables('vnetID'),'/subnets/',variables('subnet1Name'))]</variable>
+    <variable name="supportLogStorageAccountName">[toLower( concat( uniqueString(resourceGroup().id),'2'))]</variable>
+    <variable name="lbID0">[resourceId('Microsoft.Network/loadBalancers',concat('LB','-', parameters('clusterName'),'-',variables('vmNodeType0Name')))]</variable>
+    <variable name="lbIPConfig0">[concat(variables('lbID0'),'/frontendIPConfigurations/LoadBalancerIPConfig')]</variable>
+    <variable name="lbPoolID0">[concat(variables('lbID0'),'/backendAddressPools/LoadBalancerBEAddressPool')]</variable>
+    <variable name="lbProbeID0">[concat(variables('lbID0'),'/probes/FabricGatewayProbe')]</variable>
+    <variable name="lbHttpProbeID0">[concat(variables('lbID0'),'/probes/FabricHttpGatewayProbe')]</variable>
+    <variable name="lbNatPoolID0">[concat(variables('lbID0'),'/inboundNatPools/LoadBalancerBEAddressNatPool')]</variable>
+    <variable name="vmNodeType0Name">[toLower(concat('NT1', variables('vmName')))]</variable>
+    <variable name="vmNodeType0Size">Standard_A2</variable>
+    <variable name="lbID1">[resourceId('Microsoft.Network/loadBalancers',concat('LB','-', parameters('clusterName'),'-',variables('vmNodeType1Name')))]</variable>
+    <variable name="lbIPConfig1">[concat(variables('lbID1'),'/frontendIPConfigurations/LoadBalancerIPConfig')]</variable>
+    <variable name="lbPoolID1">[concat(variables('lbID1'),'/backendAddressPools/LoadBalancerBEAddressPool')]</variable>
+    <variable name="lbProbeID1">[concat(variables('lbID1'),'/probes/FabricGatewayProbe')]</variable>
+    <variable name="lbHttpProbeID1">[concat(variables('lbID1'),'/probes/FabricHttpGatewayProbe')]</variable>
+    <variable name="lbNatPoolID1">[concat(variables('lbID1'),'/inboundNatPools/LoadBalancerBEAddressNatPool')]</variable>
+    <variable name="vmNodeType1Name">[toLower(concat('NT2', variables('vmName')))]</variable>
+    <variable name="vmNodeType1Size">Standard_A2</variable>
+  </variables>
+  <resources>
+    <resource apiVersion="2015-05-01-preview" type="Microsoft.Storage/storageAccounts">
+      <name>[variables('vmStorageAccountName')]</name>
+      <location>[variables('computeLocation')]</location>
+      <properties>
+        <accountType>[parameters('storageAccountType')]</accountType>
+      </properties>
+      <tags>
+        <resourceType>Service Fabric</resourceType>
+        <clusterName>[parameters('clusterName')]</clusterName>
+      </tags>
+    </resource>
+    <resource apiVersion="2015-05-01-preview" type="Microsoft.Storage/storageAccounts">
+      <name>[variables('supportLogStorageAccountName')]</name>
+      <location>[variables('computeLocation')]</location>
+      <properties>
+        <accountType>[parameters('supportLogStorageAccountType')]</accountType>
+      </properties>
+      <tags>
+        <resourceType>Service Fabric</resourceType>
+        <clusterName>[parameters('clusterName')]</clusterName>
+      </tags>
+    </resource>
+    <resource apiVersion="2015-05-01-preview" type="Microsoft.Network/virtualNetworks">
+      <name>[variables('virtualNetworkName')]</name>
+      <location>[variables('computeLocation')]</location>
+      <properties>
+        <addressSpace>
+          <addressPrefixes>
+            <addressPrefix>[variables('addressPrefix')]</addressPrefix>
+          </addressPrefixes>
+        </addressSpace>
+        <subnets>
+          <subnet>
+            <name>[variables('subnet1Name')]</name>
+            <properties>
+              <addressPrefix>[variables('subnet1Prefix')]</addressPrefix>
+            </properties>
+          </subnet>
+          <subnet>
+            <name>[variables('subnet2Name')]</name>
+            <properties>
+              <addressPrefix>[variables('subnet2Prefix')]</addressPrefix>
+            </properties>
+          </subnet>
+        </subnets>
+      </properties>
+      <tags>
+        <resourceType>Service Fabric</resourceType>
+        <clusterName>[parameters('clusterName')]</clusterName>
+      </tags>
+    </resource>
+    <resource apiVersion="2015-05-01-preview" type="Microsoft.Network/publicIPAddresses">
+      <name>[concat(variables('lbIPName'),'-','0')]</name>
+      <location>[variables('computeLocation')]</location>
+      <properties>
+        <dnsSettings>
+          <domainNameLabel>[variables('dnsName')]</domainNameLabel>
+        </dnsSettings>
+        <publicIPAllocationMethod>Dynamic</publicIPAllocationMethod>
+      </properties>
+      <tags>
+        <resourceType>Service Fabric</resourceType>
+        <clusterName>[parameters('clusterName')]</clusterName>
+      </tags>
+    </resource>
+    <resource apiVersion="2015-05-01-preview" type="Microsoft.Network/loadBalancers">
+      <name>[concat('LB','-', parameters('clusterName'),'-',variables('vmNodeType0Name'))]</name>
+      <location>[variables('computeLocation')]</location>
+      <dependsOn>
+        <dependency>[concat('Microsoft.Network/publicIPAddresses/',concat(variables('lbIPName'),'-','0'))]</dependency>
+      </dependsOn>
+      <properties>
+        <frontendIPConfigurations>
+          <frontendIPConfiguration>
+            <name>LoadBalancerIPConfig</name>
+            <properties>
+              <publicIPAddress>
+                <id>[resourceId('Microsoft.Network/publicIPAddresses',concat(variables('lbIPName'),'-','0'))]</id>
+              </publicIPAddress>
+            </properties>
+          </frontendIPConfiguration>
+        </frontendIPConfigurations>
+        <backendAddressPools>
+          <backendAddressPool>
+            <name>LoadBalancerBEAddressPool</name>
+            <properties />
+          </backendAddressPool>
+        </backendAddressPools>
+        <loadBalancingRules>
+          <loadBalancingRule>
+            <name>LBRule</name>
+            <properties>
+              <backendAddressPool>
+                <id>[variables('lbPoolID0')]</id>
+              </backendAddressPool>
+              <backendPort>[parameters('fabricTcpGatewayPort')]</backendPort>
+              <enableFloatingIP>false</enableFloatingIP>
+              <frontendIPConfiguration>
+                <id>[variables('lbIPConfig0')]</id>
+              </frontendIPConfiguration>
+              <frontendPort>[parameters('fabricTcpGatewayPort')]</frontendPort>
+              <idleTimeoutInMinutes>5</idleTimeoutInMinutes>
+              <probe>
+                <id>[variables('lbProbeID0')]</id>
+              </probe>
+              <protocol>tcp</protocol>
+            </properties>
+          </loadBalancingRule>
+          <loadBalancingRule>
+            <name>LBHttpRule</name>
+            <properties>
+              <backendAddressPool>
+                <id>[variables('lbPoolID0')]</id>
+              </backendAddressPool>
+              <backendPort>[parameters('fabricHttpGatewayPort')]</backendPort>
+              <enableFloatingIP>false</enableFloatingIP>
+              <frontendIPConfiguration>
+                <id>[variables('lbIPConfig0')]</id>
+              </frontendIPConfiguration>
+              <frontendPort>[parameters('fabricHttpGatewayPort')]</frontendPort>
+              <idleTimeoutInMinutes>5</idleTimeoutInMinutes>
+              <probe>
+                <id>[variables('lbHttpProbeID0')]</id>
+              </probe>
+              <protocol>tcp</protocol>
+            </properties>
+          </loadBalancingRule>
+          <loadBalancingRule>
+            <name>AppPortLBRule1</name>
+            <properties>
+              <backendAddressPool>
+                <id>[variables('lbPoolID0')]</id>
+              </backendAddressPool>
+              <backendPort>[parameters('loadBalancedAppPort1')]</backendPort>
+              <enableFloatingIP>false</enableFloatingIP>
+              <frontendIPConfiguration>
+                <id>[variables('lbIPConfig0')]</id>
+              </frontendIPConfiguration>
+              <frontendPort>[parameters('loadBalancedAppPort1')]</frontendPort>
+              <idleTimeoutInMinutes>5</idleTimeoutInMinutes>
+              <probe>
+                <id>[concat(variables('lbID0'),'/probes/AppPortProbe1')]</id>
+              </probe>
+              <protocol>tcp</protocol>
+            </properties>
+          </loadBalancingRule>
+          <loadBalancingRule>
+            <name>AppPortLBRule2</name>
+            <properties>
+              <backendAddressPool>
+                <id>[variables('lbPoolID0')]</id>
+              </backendAddressPool>
+              <backendPort>[parameters('loadBalancedAppPort2')]</backendPort>
+              <enableFloatingIP>false</enableFloatingIP>
+              <frontendIPConfiguration>
+                <id>[variables('lbIPConfig0')]</id>
+              </frontendIPConfiguration>
+              <frontendPort>[parameters('loadBalancedAppPort2')]</frontendPort>
+              <idleTimeoutInMinutes>5</idleTimeoutInMinutes>
+              <probe>
+                <id>[concat(variables('lbID0'),'/probes/AppPortProbe2')]</id>
+              </probe>
+              <protocol>tcp</protocol>
+            </properties>
+          </loadBalancingRule>
+        </loadBalancingRules>
+        <probes>
+          <probe>
+            <name>FabricGatewayProbe</name>
+            <properties>
+              <intervalInSeconds>5</intervalInSeconds>
+              <numberOfProbes>2</numberOfProbes>
+              <port>[parameters('fabricTcpGatewayPort')]</port>
+              <protocol>tcp</protocol>
+            </properties>
+          </probe>
+          <probe>
+            <name>FabricHttpGatewayProbe</name>
+            <properties>
+              <intervalInSeconds>5</intervalInSeconds>
+              <numberOfProbes>2</numberOfProbes>
+              <port>[parameters('fabricHttpGatewayPort')]</port>
+              <protocol>tcp</protocol>
+            </properties>
+          </probe>
+          <probe>
+            <name>AppPortProbe1</name>
+            <properties>
+              <intervalInSeconds>5</intervalInSeconds>
+              <numberOfProbes>2</numberOfProbes>
+              <port>[parameters('loadBalancedAppPort1')]</port>
+              <protocol>tcp</protocol>
+            </properties>
+          </probe>
+          <probe>
+            <name>AppPortProbe2</name>
+            <properties>
+              <intervalInSeconds>5</intervalInSeconds>
+              <numberOfProbes>2</port>
+              <port>[parameters('loadBalancedAppPort2')]</port>
+              <protocol>tcp</protocol>
+            </properties>
+          </probe>
+        </probes>
+        <inboundNatPools>
+          <inboundNatPool>
+            <name>LoadBalancerBEAddressNatPool</name>
+            <properties>
+              <backendPort>3389</backendPort>
+              <frontendIPConfiguration>
+                <id>[variables('lbIPConfig0')]</id>
+              </frontendIPConfiguration>
+              <frontendPortRangeEnd>4500</frontendPortRangeEnd>
+              <frontendPortRangeStart>3389</frontendPortRangeStart>
+              <protocol>tcp</protocol>
+            </properties>
+          </inboundNatPool>
+        </inboundNatPools>
+      </properties>
+      <tags>
+        <resourceType>Service Fabric</resourceType>
+        <clusterName>[parameters('clusterName')]</clusterName>
+      </tags>
+    </resource>
+    <resource apiVersion="2015-06-15" type="Microsoft.Compute/virtualMachineScaleSets">
+      <name>[variables('vmNodeType0Name')]</name>
+      <location>[variables('computeLocation')]</location>
+      <dependsOn>
+        <dependency>[concat('Microsoft.Storage/storageAccounts/', variables('vmStorageAccountName'))]</dependency>
+        <dependency>[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]</dependency>
+        <dependency>[concat('Microsoft.Storage/storageAccounts/', variables('supportLogStorageAccountName'))]</dependency>
+      </dependsOn>
+      <properties>
+        <upgradePolicy>
+          <mode>Automatic</mode>
+        </upgradePolicy>
+        <virtualMachineProfile>
+          <extensionProfile>
+            <extensions>
+              <extension>
+                <name>[concat('ServiceFabricNodeVmExt','_vmNodeType0Name')]</name>
+                <properties>
+                  <type>ServiceFabricNode</type>
+                  <autoUpgradeMinorVersion>false</autoUpgradeMinorVersion>
+                  <protectedSettings>
+                    <StorageAccountKey1>[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('supportLogStorageAccountName')),'2015-05-01-preview').key1]</StorageAccountKey1>
+                    <StorageAccountKey2>[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('supportLogStorageAccountName')),'2015
